@@ -16,6 +16,8 @@ object Buyer {
 
   case class AuctionOverbid(auction: ActorRef, bid: Int)
 
+  case class AuctionWon(auction: ActorRef, bid: Int)
+
 }
 
 class Buyer(account: BuyerAccount) extends Actor {
@@ -44,6 +46,11 @@ class Buyer(account: BuyerAccount) extends Actor {
       val auctionName = overbid.auction.path.name
       println(s"$name's bid for auction $auctionName has been overbid to :" + overbid.bid)
       self ! new MakeBid(overbid.auction, overbid.bid + account.bidOver)
+
+    case won: AuctionWon =>
+      val name = self.path.name
+      val auctionName = won.auction.path.name
+      println(s"$name's has won auction $auctionName for :" + won.bid)
   }
 
 }

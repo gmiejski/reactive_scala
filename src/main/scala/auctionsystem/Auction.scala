@@ -4,7 +4,7 @@ import akka.actor.{ActorRef, Actor}
 import akka.event.LoggingReceive
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
-import auctionsystem.Buyer.{AuctionOverbid, BidAccepted, BidRejected}
+import auctionsystem.Buyer.{AuctionWon, AuctionOverbid, BidAccepted, BidRejected}
 
 import scala.concurrent.duration._
 
@@ -70,7 +70,7 @@ class Auction extends Actor {
       scheduleBidTimer()
     case BidTimer =>
       println("Auction sold: " + self.path.name)
-      //TODO notify
+      winningBid.buyer ! new AuctionWon(self, winningBid.bid)
       context become sold
   }
 
