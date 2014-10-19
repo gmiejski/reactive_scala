@@ -1,15 +1,15 @@
 package auctionsystem
 
 import akka.actor.{Actor, Props}
-import auctionsystem.BidTimer.Start
+import auctionsystem.Auction.Bid
 
 class AuctionSystemMain extends Actor{
 
   val auction = context.actorOf(Props[Auction], "auction1")
 
-  auction ! Start
+  auction ! Bid
 
   override def receive: Receive = {
-     case msg => print(s"received: $msg")
+     case msg => println(s"received: $msg")
   }
 }

@@ -1,47 +1,38 @@
 package auctionsystem
 
-import java.util.concurrent.TimeUnit
-
-import akka.actor.{Actor, Props}
+import akka.actor.Actor
 import akka.event.LoggingReceive
-import auctionsystem.BidTimer.{Expired, Start}
+import auctionsystem.Auction.{Bid, BidTimer, DeleteTimer}
 
 import scala.concurrent.duration._
 
-object BidTimer {
-
-  case class Start()
-
-  case class Expired()
-
+object Auction {
+  case class BidTimer()
+  case class DeleteTimer()
+  case class Relist()
+  case class Bid()
 }
 
-class DeleteTimer extends Actor {
-  def receive = {
-    case "start" =>
-      print( "delete timer started")
-//      context.system.scheduler.scheduleOnce(Duration.create(5, TimeUnit.SECONDS), sender, "expired");
-  }
-}
 
 class Auction extends Actor {
 
-  def notcreated: Receive = LoggingReceive {
-    case Start =>
-      sender ! "auction started"
-      context become created
+  import context.dispatcher
+
+  override def preStart() {
+    context.parent ! "auction started: " +self.path.name
+    context.system.scheduler.scheduleOnce(3 seconds, self, BidTimer)
   }
 
   def created: Receive = LoggingReceive {
-    case Expired =>
-      val deleteTimer = context.actorOf(Props[DeleteTimer], "deleteTimer1")
-      deleteTimer ! "start"
-      context become ignored
+    case Bid =>
+      println("got bid!")
+    case BidTimer =>
+      println("bid timer")
   }
 
   def ignored: Receive = LoggingReceive {
-    case "expired" => print("O SHIET")
+    case DeleteTimer => print("O SHIET - auction ended")
   }
 
-  def receive = notcreated
+  def receive = created
 }
