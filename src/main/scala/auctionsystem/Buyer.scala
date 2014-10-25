@@ -1,6 +1,6 @@
 package auctionsystem
 
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{FSM, ActorRef, Actor}
 import auctionsystem.Auction.Bid
 import auctionsystem.Buyer._
 
@@ -12,48 +12,62 @@ object Buyer {
 
   case class MakeBid(auction: ActorRef, bid: Int)
 
-  case class BuyerAccount(max: Int, bidOver: Int)
-
   case class AuctionOverbid(auction: ActorRef, bid: Int)
 
   case class AuctionWon(auction: ActorRef, bid: Int)
 
+  //state
+  sealed trait BuyerState
+
+  case object BuyerNormalState extends BuyerState
+
+  //data
+
+  sealed trait Data
+
+  case class BuyerAccount(max: Int, bidOver: Int) extends Data
+
 }
 
-class Buyer(account: BuyerAccount) extends Actor {
+class Buyer(account: BuyerAccount) extends Actor with FSM[BuyerState, Data] {
 
-  override def receive: Receive = {
-    case makeBid: MakeBid =>
-      if (makeBid.bid <= account.max) {
-        println(self.path.name + "Making new bid for: " + makeBid.auction.path.name + "with bid = " + makeBid.bid)
-        makeBid.auction ! new Bid(makeBid.bid)
+  startWith(BuyerNormalState, account)
+
+  when(BuyerNormalState) {
+    case Event(MakeBid(auction, bid), account: BuyerAccount) =>
+      if (bid <= account.max) {
+        println(self.path.name + "Making new bid for: " + auction.path.name + "with bid = " + bid)
+        auction ! new Bid(bid)
       }
-
-    case rejection: BidRejected =>
+      stay()
+    case Event(BidRejected(auction, reason, winningOffer), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = rejection.auction.path.name
-      println(s"$name's bid for auction $auctionName :rejected for reason: " + rejection.reason)
-      self ! new MakeBid(rejection.auction, rejection.winningOffer + account.bidOver)
+      val auctionName = auction.path.name
+      println(s"$name's bid for auction $auctionName :rejected for reason: " + reason)
+      self ! new MakeBid(auction, winningOffer + account.bidOver)
+      stay()
 
-    case accepted: BidAccepted =>
+    case Event(BidAccepted(auction), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = accepted.auction.path.name
+      val auctionName = auction.path.name
       println(s"$name's bid for auction $auctionName accepted")
+      stay()
 
-    case overbid: AuctionOverbid =>
+    case Event(AuctionOverbid(auction, bid), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = overbid.auction.path.name
-      println(s"$name's bid for auction $auctionName has been overbid to :" + overbid.bid)
-      if (overbid.bid + account.bidOver > account.max) {
-        println(self.path.name + s"Lost auction: $auctionName, where bid is now: " + overbid.bid)
+      val auctionName = auction.path.name
+      println(s"$name's bid for auction $auctionName has been overbid to :" + bid)
+      if (bid + account.bidOver > account.max) {
+        println(self.path.name + s"Lost auction: $auctionName, where bid is now: " + bid)
       } else {
-        self ! new MakeBid(overbid.auction, overbid.bid + account.bidOver)
+        self ! new MakeBid(auction, bid + account.bidOver)
       }
+      stay()
 
-    case won: AuctionWon =>
+    case Event(AuctionWon(auction, bid), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = won.auction.path.name
-      println(s"$name's has won auction $auctionName for :" + won.bid)
+      val auctionName = auction.path.name
+      println(s"$name's has won auction $auctionName for :" + bid)
+      stay()
   }
-
 }

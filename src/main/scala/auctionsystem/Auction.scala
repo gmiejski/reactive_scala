@@ -1,6 +1,5 @@
 package auctionsystem
 
-import akka.event.LoggingReceive
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
 import auctionsystem.Buyer.{AuctionWon, AuctionOverbid, BidAccepted, BidRejected}
@@ -92,7 +91,7 @@ class Auction extends Actor with FSM[AuctionState, Data] {
       goto(Sold)
   }
 
-  when(Sold, 5 seconds) {
+  when(Sold, stateTimeout = 5 seconds) {
     case Event(StateTimeout, w: WinningBid) =>
       stop()
   }
