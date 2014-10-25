@@ -1,12 +1,13 @@
 package auctionsystem
 
-import akka.actor.{ActorRef, Actor}
 import akka.event.LoggingReceive
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
 import auctionsystem.Buyer.{AuctionWon, AuctionOverbid, BidAccepted, BidRejected}
 
 import scala.concurrent.duration._
+import akka.actor.{Actor, ActorRef, FSM}
+
 
 object Auction {
 
@@ -18,70 +19,83 @@ object Auction {
 
   case class Bid(value: Int)
 
-  case class WinningBid(buyer: ActorRef, bid: Int)
+  //States
+  sealed trait AuctionState
+
+  case object Created extends AuctionState
+
+  case object Ignored extends AuctionState
+
+  case object Activated extends AuctionState
+
+  case object Sold extends AuctionState
+
+  // Data
+  sealed trait Data
+
+  case object Uninitialized extends Data
+
+  private final case class WinningBid(buyer: ActorRef, bid: Int) extends Data
 
 }
 
 
-class Auction extends Actor {
+class Auction extends Actor with FSM[AuctionState, Data] {
 
-  private var winningBid: WinningBid = _
-
-  import context.dispatcher
+  startWith(Created, Uninitialized)
 
   override def preStart() {
     context.parent ! AuctionStarted(self.path.name)
-    scheduleBidTimer(30 seconds)
   }
 
-  def created: Receive = LoggingReceive {
-    case bid: Bid =>
+  when(Created, stateTimeout = 10 seconds) {
+    case Event(Bid(value), Uninitialized) =>
       sender ! new BidAccepted(self)
-      winningBid = new WinningBid(sender, bid.value)
-      context become activated
-    case BidTimer =>
-      println("bid timer")
-      context.system.scheduler.scheduleOnce(2 seconds, self, DeleteTimer)
-      context become ignored
+      goto(Activated) using WinningBid(sender, value)
+    case Event(StateTimeout, Uninitialized) =>
+      println("Auction going into ignored state: " + self.path.name)
+      goto(Ignored)
   }
 
-  def ignored: Receive = LoggingReceive {
-    case DeleteTimer =>
+  when(Ignored, stateTimeout = 3 seconds) {
+    case Event(StateTimeout, Uninitialized) =>
       println("Auction ended with no bid: " + self.path.name)
-      context.stop(self)
-    case Relist =>
+      stop()
+    case Event(Relist, Uninitialized) =>
       println("Auction relisted: " + self.path.name)
-      scheduleBidTimer(3 seconds)
-      context become created
+      goto(Created)
   }
 
-  def activated: Receive = LoggingReceive {
-    case bid: Bid =>
-      if (bid.value < 0) {
+  when(Activated, stateTimeout = 3 seconds) {
+    case Event(Bid(value), winningBid: WinningBid) =>
+
+      println("#################")
+      println("Current winning bid:" + winningBid.bid + " by " + winningBid.buyer.path.name)
+      println("#################")
+
+      if (value < 0) {
         sender ! new BidRejected(self, "Your bid cannot be lower than 0!", winningBid.bid)
+        stay() using winningBid
       }
-      if (bid.value < winningBid.bid) {
+      if (value < winningBid.bid) {
         sender ! new BidRejected(self, "Your bid is too low. Current bid: " + winningBid.bid, winningBid.bid)
+        stay() using winningBid
       } else {
         sender ! new BidAccepted(self)
-        winningBid.buyer ! new AuctionOverbid(self, bid.value)
-        winningBid = new WinningBid(sender, bid.value)
+        winningBid.buyer ! new AuctionOverbid(self, value)
+        stay() using WinningBid(sender, value)
       }
-      scheduleBidTimer()
-    case BidTimer =>
+
+    case Event(StateTimeout, winningBid: WinningBid) =>
       println("Auction sold: " + self.path.name)
       winningBid.buyer ! new AuctionWon(self, winningBid.bid)
-      context become sold
+      goto(Sold)
   }
 
-  def sold: Receive = LoggingReceive {
-    case DeleteTimer =>
-      context.stop(self)
+  when(Sold, 5 seconds) {
+    case Event(StateTimeout, w: WinningBid) =>
+      stop()
   }
 
-  def receive = created
-
-  private def scheduleBidTimer(delay: FiniteDuration = 3.seconds) {
-    context.system.scheduler.scheduleOnce(delay, self, BidTimer)
-  }
+  initialize()
 }

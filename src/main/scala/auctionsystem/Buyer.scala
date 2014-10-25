@@ -25,9 +25,8 @@ class Buyer(account: BuyerAccount) extends Actor {
   override def receive: Receive = {
     case makeBid: MakeBid =>
       if (makeBid.bid <= account.max) {
+        println(self.path.name + "Making new bid for: " + makeBid.auction.path.name + "with bid = " + makeBid.bid)
         makeBid.auction ! new Bid(makeBid.bid)
-      } else {
-        println(self.path.name + "Lost auction: " + makeBid.auction.path.name + ", where bid is now: " + makeBid.bid)
       }
 
     case rejection: BidRejected =>
@@ -45,7 +44,11 @@ class Buyer(account: BuyerAccount) extends Actor {
       val name = self.path.name
       val auctionName = overbid.auction.path.name
       println(s"$name's bid for auction $auctionName has been overbid to :" + overbid.bid)
-      self ! new MakeBid(overbid.auction, overbid.bid + account.bidOver)
+      if (overbid.bid + account.bidOver > account.max) {
+        println(self.path.name + s"Lost auction: $auctionName, where bid is now: " + overbid.bid)
+      } else {
+        self ! new MakeBid(overbid.auction, overbid.bid + account.bidOver)
+      }
 
     case won: AuctionWon =>
       val name = self.path.name
