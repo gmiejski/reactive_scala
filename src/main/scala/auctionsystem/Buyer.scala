@@ -1,10 +1,16 @@
 package auctionsystem
 
-import akka.actor.{FSM, ActorRef, Actor}
+import akka.actor.{Props, FSM, ActorRef, Actor}
 import auctionsystem.Auction.Bid
 import auctionsystem.Buyer._
 
 object Buyer {
+
+  //constructor
+
+  def props ( account: BuyerAccount) : Props = Props(new Buyer(account))
+
+  //messages
 
   case class BidRejected(auction: ActorRef, reason: String, winningOffer: Int)
 
