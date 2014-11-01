@@ -1,11 +1,11 @@
 package auctionsystem
 
+import akka.actor.{Actor, ActorRef, FSM}
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
-import auctionsystem.Buyer.{AuctionWon, AuctionOverbid, BidAccepted, BidRejected}
+import auctionsystem.Buyer.{AuctionOverbid, AuctionWon, BidAccepted, BidRejected}
 
 import scala.concurrent.duration._
-import akka.actor.{Actor, ActorRef, FSM}
 
 
 object Auction {
@@ -16,10 +16,13 @@ object Auction {
 
   case class Relist()
 
-  case class Bid(value: Int)
+  case class Bid(value: Int) {
+    require(value > 0, "Bid value must be positive $ value!")
+  }
 
   //States
   sealed trait AuctionState
+
 
   case object Created extends AuctionState
 
@@ -32,48 +35,56 @@ object Auction {
   // Data
   sealed trait Data
 
-  case object Uninitialized extends Data
+  case object Uninitialised extends Data
 
-  private final case class WinningBid(buyer: ActorRef, bid: Int) extends Data
+  final case class WinningBid(buyer: ActorRef, bid: Int) extends Data
 
 }
 
 
 class Auction extends Actor with FSM[AuctionState, Data] {
 
-  startWith(Created, Uninitialized)
+  import akka.actor.Cancellable
+  import context.dispatcher
+
+  startWith(Created, Uninitialised)
+
+  private var currentTimer: Cancellable = _
 
   override def preStart() {
     context.parent ! AuctionStarted(self.path.name)
+    currentTimer = context.system.scheduler.scheduleOnce(10 seconds, self, BidTimer)
   }
 
-  when(Created, stateTimeout = 10 seconds) {
-    case Event(Bid(value), Uninitialized) =>
+  when(Created) {
+    case Event(Bid(value), Uninitialised) =>
       sender ! new BidAccepted(self)
-      goto(Activated) using WinningBid(sender, value)
-    case Event(StateTimeout, Uninitialized) =>
+      currentTimer.cancel()
+      currentTimer = context.system.scheduler.scheduleOnce(7 seconds, self, BidTimer)
+      goto(Activated) using WinningBid(sender(), value)
+    case Event(BidTimer, Uninitialised) =>
       println("Auction going into ignored state: " + self.path.name)
+      currentTimer = context.system.scheduler.scheduleOnce(3 seconds, self, DeleteTimer)
       goto(Ignored)
   }
 
-  when(Ignored, stateTimeout = 3 seconds) {
-    case Event(StateTimeout, Uninitialized) =>
-      println("Auction ended with no bid: " + self.path.name)
-      stop()
-    case Event(Relist, Uninitialized) =>
+  when(Ignored) {
+    case Event(Relist, Uninitialised) =>
       println("Auction relisted: " + self.path.name)
       goto(Created)
+    case Event(DeleteTimer, Uninitialised) =>
+      println("Auction ended with no bid: " + self.path.name)
+      stop()
   }
 
-  when(Activated, stateTimeout = 3 seconds) {
+  when(Activated) {
     case Event(Bid(value), winningBid: WinningBid) =>
-
       println("#################")
       println("Current winning bid:" + winningBid.bid + " by " + winningBid.buyer.path.name)
       println("#################")
 
-      if (value < 0) {
-        sender ! new BidRejected(self, "Your bid cannot be lower than 0!", winningBid.bid)
+      if (sender().path == winningBid.buyer.path) {
+        sender ! new BidRejected(self, "Your cannot overbid your own bid: " + winningBid.bid, winningBid.bid)
         stay() using winningBid
       }
       if (value < winningBid.bid) {
@@ -82,17 +93,17 @@ class Auction extends Actor with FSM[AuctionState, Data] {
       } else {
         sender ! new BidAccepted(self)
         winningBid.buyer ! new AuctionOverbid(self, value)
-        stay() using WinningBid(sender, value)
+        stay() using WinningBid(sender(), value)
       }
-
-    case Event(StateTimeout, winningBid: WinningBid) =>
+    case Event(BidTimer, winningBid: WinningBid) =>
       println("Auction sold: " + self.path.name)
       winningBid.buyer ! new AuctionWon(self, winningBid.bid)
+      currentTimer = context.system.scheduler.scheduleOnce(3 seconds, self, DeleteTimer)
       goto(Sold)
   }
 
-  when(Sold, stateTimeout = 5 seconds) {
-    case Event(StateTimeout, w: WinningBid) =>
+  when(Sold) {
+    case Event(DeleteTimer, w: WinningBid) =>
       stop()
   }
 
