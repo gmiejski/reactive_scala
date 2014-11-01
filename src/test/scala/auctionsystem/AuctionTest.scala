@@ -52,13 +52,15 @@ with Matchers {
     }
 
     "in CREATED state" should {
-      "receive bid timer after some time" ignore {
-        // TODO
+      "receive bid timer after some time" in {
+        // Czemu Prestart się odpala 2 razy?
         val auction = fixture.auction
-        val testProbe = fixture.auctionProbe
+        val testProbe = TestProbe()
+        testProbe watch auction
 
         within(13 seconds) {
-          testProbe.expectMsg(BidTimer)
+          awaitCond(auction.stateName == Auction.Ignored, 13 seconds) // To do usunięcia jka to pod spodem zadziała
+//          testProbe.expectMsg(13 seconds,BidTimer) // TODO czemu to nie wchodzi?
         }
       }
 

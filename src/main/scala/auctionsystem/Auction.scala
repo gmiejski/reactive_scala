@@ -53,6 +53,7 @@ class Auction extends Actor with FSM[AuctionState, Data] {
 
   override def preStart() {
     context.parent ! AuctionStarted(self.path.name)
+    println("Prestart!!!!!!!!!")
     currentTimer = context.system.scheduler.scheduleOnce(10 seconds, self, BidTimer)
   }
 
