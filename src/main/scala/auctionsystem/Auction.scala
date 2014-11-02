@@ -1,14 +1,17 @@
 package auctionsystem
 
-import akka.actor.{Actor, ActorRef, FSM}
+import akka.actor.{Props, Actor, ActorRef, FSM}
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
-import auctionsystem.Buyer.{AuctionOverbid, AuctionWon, BidAccepted, BidRejected}
+import auctionsystem.Buyer._
 
 import scala.concurrent.duration._
 
 
 object Auction {
+
+  def props(auctionName: String): Props = Props(new Auction(auctionName))
+
 
   case class BidTimer()
 
@@ -23,7 +26,6 @@ object Auction {
   //States
   sealed trait AuctionState
 
-
   case object Created extends AuctionState
 
   case object Ignored extends AuctionState
@@ -33,16 +35,16 @@ object Auction {
   case object Sold extends AuctionState
 
   // Data
-  sealed trait Data
+  sealed trait AuctionData
 
-  case object Uninitialised extends Data
+  case object Uninitialised extends AuctionData
 
-  final case class WinningBid(buyer: ActorRef, bid: Int) extends Data
+  final case class WinningBid(buyer: ActorRef, bid: Int) extends AuctionData
 
 }
 
 
-class Auction extends Actor with FSM[AuctionState, Data] {
+class Auction(auctionName: String) extends Actor with FSM[AuctionState, AuctionData] {
 
   import akka.actor.Cancellable
   import context.dispatcher
@@ -59,7 +61,7 @@ class Auction extends Actor with FSM[AuctionState, Data] {
 
   when(Created) {
     case Event(Bid(value), Uninitialised) =>
-      sender ! new BidAccepted(self)
+      sender ! new BidAccepted(auctionName, value)
       currentTimer.cancel()
       currentTimer = context.system.scheduler.scheduleOnce(7 seconds, self, BidTimer)
       goto(Activated) using WinningBid(sender(), value)
@@ -85,20 +87,20 @@ class Auction extends Actor with FSM[AuctionState, Data] {
       println("#################")
 
       if (sender().path == winningBid.buyer.path) {
-        sender ! new BidRejected(self, "Your cannot overbid your own bid: " + winningBid.bid, winningBid.bid)
+        sender ! new SelfOverbidRejected(auctionName, "Your cannot overbid your own bid: " + winningBid.bid)
         stay() using winningBid
       }
-      if (value < winningBid.bid) {
-        sender ! new BidRejected(self, "Your bid is too low. Current bid: " + winningBid.bid, winningBid.bid)
+      else if (value < winningBid.bid) {
+        sender ! new BidRejected(auctionName, "Your bid is too low. Current bid: " + winningBid.bid, winningBid.bid)
         stay() using winningBid
       } else {
-        sender ! new BidAccepted(self)
-        winningBid.buyer ! new AuctionOverbid(self, value)
+        sender ! new BidAccepted(auctionName, value)
+        winningBid.buyer ! new AuctionOverbid(auctionName, value)
         stay() using WinningBid(sender(), value)
       }
     case Event(BidTimer, winningBid: WinningBid) =>
-      println("Auction sold: " + self.path.name)
-      winningBid.buyer ! new AuctionWon(self, winningBid.bid)
+      println("Auction sold: " + auctionName)
+      winningBid.buyer ! new AuctionWon(auctionName, winningBid.bid)
       currentTimer = context.system.scheduler.scheduleOnce(3 seconds, self, DeleteTimer)
       goto(Sold)
   }

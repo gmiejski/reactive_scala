@@ -1,26 +1,38 @@
 package auctionsystem
 
-import akka.actor.{Props, FSM, ActorRef, Actor}
+import akka.actor._
+import akka.util.Timeout
 import auctionsystem.Auction.Bid
+import auctionsystem.AuctionSearch.{AuctionFound, AuctionNotFound}
+import auctionsystem.AuctionSystemMain.AuctionStarted
 import auctionsystem.Buyer._
+
+import scala.util._
+import scala.concurrent.duration._
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
+import akka.pattern.ask
 
 object Buyer {
 
   //constructor
 
-  def props ( account: BuyerAccount) : Props = Props(new Buyer(account))
+  def props(account: BuyerAccount): Props = Props(new Buyer(account))
 
   //messages
 
-  case class BidRejected(auction: ActorRef, reason: String, winningOffer: Int)
+  case class BidRejected(auctionName: String, reason: String, winningOffer: Int)
 
-  case class BidAccepted(auction: ActorRef)
+  case class SelfOverbidRejected(auctionName: String, reason: String)
 
-  case class MakeBid(auction: ActorRef, bid: Int)
+  case class BidAccepted(auctionName: String, bid: Int)
 
-  case class AuctionOverbid(auction: ActorRef, bid: Int)
+  case class MakeBid(auction: String, bid: Int)
 
-  case class AuctionWon(auction: ActorRef, bid: Int)
+  case class AuctionOverbid(auctionName: String, bid: Int)
+
+  case class AuctionWon(auctionName: String, bid: Int)
 
   //state
   sealed trait BuyerState
@@ -29,51 +41,78 @@ object Buyer {
 
   //data
 
-  sealed trait Data
+  sealed trait BuyerData
 
-  case class BuyerAccount(max: Int, bidOver: Int) extends Data
+  case class BuyerAccount(max: Int, bidOver: Int) extends BuyerData
 
 }
 
-class Buyer(account: BuyerAccount) extends Actor with FSM[BuyerState, Data] {
+class Buyer(account: BuyerAccount) extends Actor with FSM[BuyerState, BuyerData] {
 
   startWith(BuyerNormalState, account)
 
+  var auctionSearch: ActorRef = _
+
+  override def preStart() {
+    val actorSelection: ActorSelection = context.actorSelection("../auctionSearch")
+    implicit val timeout = Timeout(5 seconds)
+    actorSelection.resolveOne(2 seconds).onComplete {
+      case Success(actorRef: ActorRef) =>
+        println("buyer; " + self.path.name + " got auctionSearch")
+        auctionSearch = actorRef
+      case Failure(t: ActorNotFound) =>
+        println("An error has occured during actor retrieving: " + t.getMessage)
+        println("buyer: " + self.path.name + " STOPPED!!!!!!!!!!!!!!!!!")
+        stop()
+    }
+  }
+
   when(BuyerNormalState) {
-    case Event(MakeBid(auction, bid), account: BuyerAccount) =>
-      if (bid <= account.max) {
-        println(self.path.name + "Making new bid for: " + auction.path.name + "with bid = " + bid)
-        auction ! new Bid(bid)
+
+    case Event(MakeBid(auctionName, bid), account: BuyerAccount) =>
+      implicit val timeout = Timeout(5 seconds)
+      val auction = auctionSearch ? AuctionSearch.Search(auctionName)
+
+      auction.onComplete {
+        case Success(auctionFound: AuctionFound) =>
+          if (bid <= account.max) {
+            println(self.path.name + " making new bid for: " + auctionFound.auctionName + " with bid = " + bid)
+            auctionFound.auction ! new Bid(bid)
+          }
+        case Failure(error: AuctionNotFound) =>
+          println("Auction not found: " + error.name + ". Not making any bid!")
       }
       stay()
-    case Event(BidRejected(auction, reason, winningOffer), account: BuyerAccount) =>
+
+    case Event(BidRejected(auctionName, reason, winningOffer), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = auction.path.name
       println(s"$name's bid for auction $auctionName :rejected for reason: " + reason)
-      self ! new MakeBid(auction, winningOffer + account.bidOver)
+      self ! new MakeBid(auctionName, winningOffer + account.bidOver)
       stay()
 
-    case Event(BidAccepted(auction), account: BuyerAccount) =>
+    case Event(SelfOverbidRejected(auctionName, reason), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = auction.path.name
-      println(s"$name's bid for auction $auctionName accepted")
+      println(s"$name's bid for auction $auctionName :rejected for reason: " + reason)
       stay()
 
-    case Event(AuctionOverbid(auction, bid), account: BuyerAccount) =>
+    case Event(BidAccepted(auctionName, bid), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = auction.path.name
+      println(s"$name's bid for auction $auctionName accepted with bid = $bid")
+      stay()
+
+    case Event(AuctionOverbid(auctionName, bid), account: BuyerAccount) =>
+      val name = self.path.name
       println(s"$name's bid for auction $auctionName has been overbid to :" + bid)
       if (bid + account.bidOver > account.max) {
         println(self.path.name + s"Lost auction: $auctionName, where bid is now: " + bid)
       } else {
-        self ! new MakeBid(auction, bid + account.bidOver)
+        self ! new MakeBid(auctionName, bid + account.bidOver)
       }
       stay()
 
-    case Event(AuctionWon(auction, bid), account: BuyerAccount) =>
+    case Event(AuctionWon(auctionName, bid), account: BuyerAccount) =>
       val name = self.path.name
-      val auctionName = auction.path.name
-      println(s"$name's has won auction $auctionName for :" + bid)
+      println(s"$name has won auction $auctionName for :" + bid)
       stay()
   }
 }

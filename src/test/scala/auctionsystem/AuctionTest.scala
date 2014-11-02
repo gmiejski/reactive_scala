@@ -4,7 +4,7 @@ import akka.actor._
 import akka.testkit._
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
-import auctionsystem.Buyer.{AuctionWon, AuctionOverbid, BidAccepted, BidRejected}
+import auctionsystem.Buyer._
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
@@ -22,11 +22,11 @@ with Matchers {
 
   def fixture = {
     new {
-      val auction = TestFSMRef(new Auction)
+      val auction = TestFSMRef(new Auction("auction2"))
       val auctionProbe = TestProbe()
       auctionProbe watch auction
 
-      val ignoredAuction = TestFSMRef(new Auction)
+      val ignoredAuction = TestFSMRef(new Auction("auction1"))
       ignoredAuction.setState(Auction.Ignored, Auction.Uninitialised)
       val ignoredAuctionProbe = TestProbe()
       ignoredAuctionProbe.watch(ignoredAuction)
@@ -38,7 +38,7 @@ with Matchers {
     "started" should {
       "call auction started event" in {
         val parent = TestProbe()
-        val underTest = TestActorRef(Props[Auction], parent.ref, "Aution")
+        val underTest = TestActorRef(Auction.props("anyAuction"), parent.ref, "Auction")
 
         parent.expectMsg(AuctionStarted(underTest.path.name))
       }
@@ -60,7 +60,7 @@ with Matchers {
 
         within(13 seconds) {
           awaitCond(auction.stateName == Auction.Ignored, 13 seconds) // To do usunięcia jka to pod spodem zadziała
-//          testProbe.expectMsg(13 seconds,BidTimer) // TODO czemu to nie wchodzi?
+          //          testProbe.expectMsg(13 seconds,BidTimer) // TODO czemu to nie wchodzi?
         }
       }
 
@@ -141,7 +141,7 @@ with Matchers {
         buyer1 send(auction, new Bid(10))
         buyer2 send(auction, new Bid(5))
 
-        buyer2.expectMsg(BidRejected(auction, "Your bid is too low. Current bid: 10", 10)) // TODO any string matcher
+        buyer2.expectMsg(BidRejected("auction2", "Your bid is too low. Current bid: 10", 10)) // TODO any string matcher
       }
 
       "send overbid message to last buyer when he got overbid" in {
@@ -155,8 +155,8 @@ with Matchers {
         buyerOne.send(auction, new Bid(15))
         buyerTwo.send(auction, new Bid(20))
 
-        buyerOne.expectMsg(BidAccepted(auction)) // TODO don't bother about first message
-        buyerOne.expectMsg(AuctionOverbid(auction, 20))
+        buyerOne.expectMsg(BidAccepted("auction2", 15))
+        buyerOne.expectMsg(AuctionOverbid("auction2", 20))
       }
 
       "send error when one buyer overbids his own bid " in {
@@ -169,17 +169,19 @@ with Matchers {
         buyerOne.send(auction, new Bid(15))
         buyerOne.send(auction, new Bid(20))
 
-        buyerOne.expectMsg(BidAccepted(auction)) // TODO don't bother about first message
-        buyerOne.expectMsg(BidRejected(auction, "Your cannot overbid your own bid: 15", 15))
+        buyerOne.expectMsg(BidAccepted("auction2", 15)) // TODO don't bother about first message
+        buyerOne.expectMsg(SelfOverbidRejected("auction2", "Your cannot overbid your own bid: 15"))
+        auctionProbe.expectNoMsg()
       }
 
-      "send winning message to buyer who won auction" ignore { // TODO wypieprza się, ale jak się da rerun failed tests, to już działa...
-        val auction = TestFSMRef(new Auction)
+      "send winning message to buyer who won auction" ignore {
+        // TODO wypieprza się, ale jak się da rerun failed tests, to już działa...
+        val auction = TestFSMRef(new Auction("someAuction"))
 
         auction ! new Bid(10)
         auction ! BidTimer
-        expectMsg(BidAccepted(auction))
-        expectMsg(AuctionWon(auction, 10)) // TODO to detailed message with price for which we bought auction
+        expectMsg(BidAccepted("someAuction", 10))
+        expectMsg(AuctionWon("someAuction", 10))
       }
 
       "should go to Sold state after auction ended" in {
