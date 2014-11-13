@@ -79,14 +79,6 @@ with Matchers {
     }
 
     "in IGNORED state" should {
-      "receive delete timer" ignore {
-        // TODO
-        val auction = fixture.ignoredAuction
-        val testProbe = fixture.ignoredAuctionProbe
-
-        testProbe.expectMsgAllOf(5 seconds, DeleteTimer)
-      }
-
       "be stopped after receiving DeleteTimer" in {
         val auction = fixture.ignoredAuction
         val auctionProbe = TestProbe()
@@ -122,14 +114,6 @@ with Matchers {
     }
 
     "in activated state" should {
-      "receive bid timer" ignore {
-        // TODO
-        val auction = fixture.ignoredAuction
-        val testProbe = fixture.ignoredAuctionProbe
-
-        testProbe.expectMsgAllOf(5 seconds, DeleteTimer)
-      }
-
       "respond with bidRejected when bid didn't overbid last bid " in {
         val auction = fixture.auction
         val auctionProbe = TestProbe()
@@ -179,8 +163,9 @@ with Matchers {
         val auction = TestFSMRef(new Auction("someAuction"))
 
         auction ! new Bid(10)
-        auction ! BidTimer
         expectMsg(BidAccepted("someAuction", 10))
+
+        auction ! BidTimer
         expectMsg(AuctionWon("someAuction", 10))
       }
 

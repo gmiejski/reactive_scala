@@ -1,15 +1,7 @@
 package auctionsystem
 
 import akka.actor._
-import akka.pattern.ask
-import akka.util.Timeout
-import auctionsystem.AuctionSearch.Search
-import auctionsystem.Buyer.{MakeBid, BuyerAccount}
-
-import scala.util.{Failure, Success}
-import scala.concurrent.duration._
-
-import scala.concurrent.ExecutionContext.Implicits.global
+import auctionsystem.Buyer.{BuyerAccount, MakeBid}
 
 object AuctionSystemMain {
 
@@ -24,20 +16,20 @@ class AuctionSystemMain extends Actor {
 
   val auctionSearch = context.actorOf(Props[AuctionSearch], "auctionSearch")
 
-
   val seller = context.actorOf(Props[Seller])
 
   auctionSearch.tell(AuctionSearch.RegisterAuction("rower"), seller)
   auctionSearch.tell(AuctionSearch.RegisterAuction("Podróż życia"), seller)
+  auctionSearch.tell(AuctionSearch.RegisterAuction("Adiday"), seller)
 
   val buyer1 = context.actorOf(Buyer.props(new BuyerAccount(100, 2)), "buyer1")
-//  val buyer2 = context.actorOf(Buyer.props(new BuyerAccount(90, 5)), "buyer2")
-//  val buyer3 = context.actorOf(Buyer.props(new BuyerAccount(303, 33)), "buyer3")
+  val buyer2 = context.actorOf(Buyer.props(new BuyerAccount(90, 5)), "buyer2")
+  val buyer3 = context.actorOf(Buyer.props(new BuyerAccount(303, 33)), "buyer3")
 
   buyer1 ! new MakeBid("rower", 10)
   buyer1 ! new MakeBid("rower", 9)
-//  buyer2 ! new MakeBid("rower", 20)
-//  buyer3 ! new MakeBid("rower", 10)
+  buyer3 ! new MakeBid("rower", 20)
+  buyer3 ! new MakeBid("życia", 10)
 
   //  val actorSelection: ActorSelection = context.actorSelection("/user/auctionSearch")
 

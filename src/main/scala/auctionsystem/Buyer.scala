@@ -1,18 +1,15 @@
 package auctionsystem
 
 import akka.actor._
+import akka.pattern.ask
 import akka.util.Timeout
 import auctionsystem.Auction.Bid
 import auctionsystem.AuctionSearch.{AuctionFound, AuctionNotFound}
-import auctionsystem.AuctionSystemMain.AuctionStarted
 import auctionsystem.Buyer._
 
-import scala.util._
-import scala.concurrent.duration._
-
 import scala.concurrent.ExecutionContext.Implicits.global
-
-import akka.pattern.ask
+import scala.concurrent.duration._
+import scala.util._
 
 object Buyer {
 
@@ -58,7 +55,6 @@ class Buyer(account: BuyerAccount) extends Actor with FSM[BuyerState, BuyerData]
     implicit val timeout = Timeout(5 seconds)
     actorSelection.resolveOne(2 seconds).onComplete {
       case Success(actorRef: ActorRef) =>
-        println("buyer; " + self.path.name + " got auctionSearch")
         auctionSearch = actorRef
       case Failure(t: ActorNotFound) =>
         println("An error has occured during actor retrieving: " + t.getMessage)
@@ -68,7 +64,6 @@ class Buyer(account: BuyerAccount) extends Actor with FSM[BuyerState, BuyerData]
   }
 
   when(BuyerNormalState) {
-
     case Event(MakeBid(auctionName, bid), account: BuyerAccount) =>
       implicit val timeout = Timeout(5 seconds)
       val auction = auctionSearch ? AuctionSearch.Search(auctionName)

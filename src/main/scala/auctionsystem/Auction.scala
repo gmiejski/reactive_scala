@@ -1,6 +1,6 @@
 package auctionsystem
 
-import akka.actor.{Props, Actor, ActorRef, FSM}
+import akka.actor.{Actor, ActorRef, FSM, Props}
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
 import auctionsystem.Buyer._
@@ -55,7 +55,6 @@ class Auction(auctionName: String) extends Actor with FSM[AuctionState, AuctionD
 
   override def preStart() {
     context.parent ! AuctionStarted(self.path.name)
-    println("Prestart!!!!!!!!!")
     currentTimer = context.system.scheduler.scheduleOnce(10 seconds, self, BidTimer)
   }
 
