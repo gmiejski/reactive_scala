@@ -1,14 +1,7 @@
-package auctionsystem
+package auctionsystem.search
 
-import akka.actor.{Actor, ActorNotFound, ActorRef, ActorSelection}
-import akka.io.Tcp.Register
-import auctionsystem.AuctionSearch._
-import auctionsystem.AuctionSystemMain.AuctionStarted
-
-
-import scala.util.{Failure, Success}
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
+import akka.actor.{Actor, ActorRef}
+import auctionsystem.search.AuctionSearch._
 
 object AuctionSearch {
 
@@ -18,7 +11,7 @@ object AuctionSearch {
 
   case class AuctionNotFound(name: String) extends Throwable
 
-  case class RegisterAuction(auction: String)
+  case class RegisterAuction(auctionName: String, auction: ActorRef)
 
   case class AuctionRegistered(auctionName: String, auction: ActorRef)
 
@@ -34,6 +27,7 @@ class AuctionSearch extends Actor {
 
   override def receive: Receive = {
     case Search(auctionKeyword: String) =>
+      println("search in actor : " + self.path.name)
       val singleWord: String = if (auctionKeyword.trim.indexOf(" ") == -1) auctionKeyword.trim() else auctionKeyword.trim.substring(auctionKeyword.indexOf(" "))
       println("auction keyword = " + singleWord)
       val auctionFullName: Option[String] = auctions.keys.find(_.contains(auctionKeyword))
@@ -44,8 +38,8 @@ class AuctionSearch extends Actor {
         sender() ! AuctionNotFound(auctionKeyword)
       }
 
-    case RegisterAuction(auctionName: String) =>
-      val auction = context.actorOf(Auction.props(auctionName)) // TODO add name to actorRef and check if can register such name
+    case RegisterAuction(auctionName: String, auction: ActorRef) =>
+      println("registering auction in actor : " + self.path.name + ". Auction name = " + auctionName)
       auctions = auctions.+(auctionName -> auction)
       sender() ! AuctionRegistered(auctionName, auction)
   }

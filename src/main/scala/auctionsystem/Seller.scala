@@ -1,13 +1,12 @@
 package auctionsystem
 
 import akka.actor._
-import auctionsystem.AuctionSearch.AuctionRegistered
 import auctionsystem.Seller._
-
-import scala.util.{Failure, Success}
-import scala.concurrent.duration._
+import auctionsystem.search.AuctionSearch.AuctionRegistered
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 object Seller {
 
@@ -34,7 +33,7 @@ class Seller extends FSM[SellerState, SellerData] {
 
   def this(auctionNames: String*) = {
     this()
-    currentAuctions = auctionNames.toList.map(x => context.actorOf(Auction.props(x)))
+    //    currentAuctions = auctionNames.toList.map(x => context.actorOf(Auction.props(x)))
     historyAuctions = List()
   }
 
@@ -52,6 +51,8 @@ class Seller extends FSM[SellerState, SellerData] {
         println("seller: " + self.path.name + " STOPPED!!!!!!!!!!!!!!!!!")
         stop()
     }
+
+
   }
 
   when(NormalState) {

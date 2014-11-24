@@ -1,6 +1,6 @@
 package auctionsystem
 
-import akka.actor.{Actor, ActorRef, FSM, Props}
+import akka.actor._
 import auctionsystem.Auction._
 import auctionsystem.AuctionSystemMain.AuctionStarted
 import auctionsystem.Buyer._
@@ -55,6 +55,14 @@ class Auction(auctionName: String) extends Actor with FSM[AuctionState, AuctionD
 
   override def preStart() {
     context.parent ! AuctionStarted(self.path.name)
+    //    val actorSelection: ActorSelection = context.actorSelection("../auctionSearch") // TODO change path
+    //    implicit val timeout = Timeout(5 seconds)
+    //    actorSelection.resolveOne(2 seconds).onComplete {
+    //      case Success(actorRef: ActorRef) =>
+    //        actorRef ! RegisterAuction(auctionName, self)
+    //      case Failure(t: ActorNotFound) =>
+    //        println("An error has occured during actor retrieving: " + t.getMessage)
+    //    }
     currentTimer = context.system.scheduler.scheduleOnce(10 seconds, self, BidTimer)
   }
 

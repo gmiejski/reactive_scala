@@ -5,9 +5,10 @@ import akka.pattern.ask
 import akka.testkit.{ImplicitSender, TestActorRef, TestKit, TestProbe}
 import akka.util.Timeout
 import auctionsystem.Auction.BidTimer
-import auctionsystem.AuctionSearch.{AuctionFound, AuctionNotFound}
 import auctionsystem.Buyer._
-import auctionsystem.{AuctionSearch, Buyer, Seller}
+import auctionsystem.search.AuctionSearch
+import auctionsystem.search.AuctionSearch.{AuctionFound, AuctionNotFound}
+import auctionsystem.{Auction, Buyer, Seller}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -24,9 +25,9 @@ with Matchers {
     system.shutdown()
   }
 
-  "Auction ssytem" when {
+  "Auction system" when {
 
-    "started with many buyers" should {
+    "started with many buyers and using replication strategy" should {
 
       "end with auction bought" in {
 
@@ -34,9 +35,13 @@ with Matchers {
 
         val seller = TestActorRef(Props[Seller])
 
-        auctionSearch.tell(AuctionSearch.RegisterAuction("rower"), seller)
-        auctionSearch.tell(AuctionSearch.RegisterAuction("Podróż życia"), seller)
-        auctionSearch.tell(AuctionSearch.RegisterAuction("Adiday"), seller)
+        val auction1 = TestActorRef(Auction.props("rower"))
+        val auction2 = TestActorRef(Auction.props("Podróż życia"))
+        val auction3 = TestActorRef(Auction.props("Adiday"))
+
+        auctionSearch.tell(AuctionSearch.RegisterAuction("rower", auction1), seller)
+        auctionSearch.tell(AuctionSearch.RegisterAuction("Podróż życia", auction2), seller)
+        auctionSearch.tell(AuctionSearch.RegisterAuction("Adiday", auction3), seller)
 
         val buyer1 = TestActorRef(Buyer.props(new BuyerAccount(100, 2)), "buyer1")
         val buyer2 = TestActorRef(Buyer.props(new BuyerAccount(90, 5)), "buyer2")
@@ -55,8 +60,8 @@ with Matchers {
 
         auction.onComplete {
           case Success(auctionFound: AuctionFound) =>
-              auctionFound.auction ! BidTimer
-              testProbe.expectMsg(AuctionWon)
+            auctionFound.auction ! BidTimer
+            testProbe.expectMsg(AuctionWon)
           case Failure(error: AuctionNotFound) =>
             println("Auction not found: " + error.name + ". Not making any bid!")
         }

@@ -4,8 +4,9 @@ import akka.actor._
 import akka.pattern.ask
 import akka.util.Timeout
 import auctionsystem.Auction.Bid
-import auctionsystem.AuctionSearch.{AuctionFound, AuctionNotFound}
 import auctionsystem.Buyer._
+import auctionsystem.search.AuctionSearch
+import auctionsystem.search.AuctionSearch.{AuctionFound, AuctionNotFound}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
