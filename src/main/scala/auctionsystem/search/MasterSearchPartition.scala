@@ -21,9 +21,8 @@ class MasterSearchPartition extends Actor {
   override def receive = {
     case x: AuctionSearch.Search =>
       println("MASTER SEARCH: Searching")
-      val searchHelper = context.actorOf(SearchHelper.props(auctionSearchers, sender()))
+      val searchHelper = context.actorOf(SearchHelper.props(router, sender()))
       searchHelper ! x
-    //      router.route(Broadcast(x), sender())
     case x: AuctionSearch.RegisterAuction =>
       println("MASTER SEARCH : register")
       router.route(x, sender())
@@ -32,14 +31,5 @@ class MasterSearchPartition extends Actor {
       val r = context.actorOf(Props[AuctionSearch])
       context watch r
       router = router.addRoutee(r)
-    //      router.route(Broadcast(x), sender())
-
-
-    //      router.route(x, sender())
-    //    case Terminated(a) =>
-    //      router = router.removeRoutee(a)
-    //      val r = context.actorOf(Props[AuctionSearch])
-    //      context watch r
-    //      router = router.addRoutee(r)
   }
 }

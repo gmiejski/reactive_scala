@@ -1,6 +1,7 @@
 package auctionsystem.search
 
 import akka.actor._
+import akka.routing.{Broadcast, Router}
 import akka.util.Timeout
 import auctionsystem.search.SearchHelper.SearchTimeout
 
@@ -9,7 +10,7 @@ import scala.concurrent.duration._
 
 object SearchHelper {
 
-  def props(auctionSearchers: List[ActorRef], buyer: ActorRef) = Props(new SearchHelper(auctionSearchers, buyer))
+  def props(auctionSearchers: Router, buyer: ActorRef) = Props(new SearchHelper(auctionSearchers, buyer))
 
   case object SearchTimeout
 
@@ -17,7 +18,7 @@ object SearchHelper {
 
 class SearchHelper extends Actor {
 
-  var auctionSearchers: List[ActorRef] = _
+  var auctionSearchRouter: Router = _
   var buyer: ActorRef = _
   var auctionName: String = _
 
@@ -26,11 +27,12 @@ class SearchHelper extends Actor {
 
   private var timer: Cancellable = _
 
-  def this(auctionSearchers: List[ActorRef], buyer: ActorRef) = {
+  def this(auctionSearchRouter: Router, buyer: ActorRef) = {
     this()
-    this.auctionSearchers = auctionSearchers
+    this.auctionSearchRouter = auctionSearchRouter
     this.buyer = buyer
-    this.maxAnswers = auctionSearchers.size
+    this.maxAnswers = auctionSearchRouter.routees.size
+    println(auctionSearchRouter.routees.size)
   }
 
   def fireAction(auctionName: String) = {
@@ -38,9 +40,7 @@ class SearchHelper extends Actor {
 
     timer = context.system.scheduler.scheduleOnce(10 seconds, self, SearchTimeout)
 
-    for (auctionSearch <- auctionSearchers) {
-      auctionSearch ! AuctionSearch.Search(auctionName)
-    }
+    auctionSearchRouter.route(Broadcast(AuctionSearch.Search(auctionName)), self)
   }
 
   override def receive = {
