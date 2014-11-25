@@ -15,9 +15,6 @@ class MasterSearchReplication extends Actor {
     Router(RoundRobinRoutingLogic(), routees)
   }
 
-  //  val router = context.actorOf(Props[AuctionSearch].
-  //    withRouter(RoundRobinRouter(5)), name = "masterSearchRouter")
-
   override def receive: Receive = {
     case x: AuctionSearch.Search =>
       println("MASTER SEARCH: Searching")
@@ -30,6 +27,5 @@ class MasterSearchReplication extends Actor {
       val r = context.actorOf(Props[AuctionSearch])
       context watch r
       router = router.addRoutee(r)
-
   }
 }

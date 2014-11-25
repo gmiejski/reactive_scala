@@ -40,7 +40,7 @@ class Seller extends FSM[SellerState, SellerData] {
   startWith(NormalState, SellerAccount(0))
 
   override def preStart() {
-    val actorSelection: ActorSelection = context.actorSelection("/user/app/auctionSearch")
+    val actorSelection: ActorSelection = context.actorSelection("../auctionSearch")
 
     actorSelection.resolveOne(2 seconds).onComplete {
       case Success(actorRef: ActorRef) =>

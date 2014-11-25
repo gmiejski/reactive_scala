@@ -6,8 +6,8 @@ import akka.testkit.{ImplicitSender, TestActorRef, TestKit, TestProbe}
 import akka.util.Timeout
 import auctionsystem.Auction.BidTimer
 import auctionsystem.Buyer._
-import auctionsystem.search.AuctionSearch
 import auctionsystem.search.AuctionSearch.{AuctionFound, AuctionNotFound}
+import auctionsystem.search.{AuctionSearch, MasterSearchReplication}
 import auctionsystem.{Auction, Buyer, Seller}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util._
 
-class IntegrationTest extends TestKit(ActorSystem("AuctionTest"))
+class ReplicationRoutingIntegrationTest extends TestKit(ActorSystem("AuctionTest"))
 with WordSpecLike
 with BeforeAndAfterAll
 with ImplicitSender
@@ -26,12 +26,9 @@ with Matchers {
   }
 
   "Auction system" when {
-
-    "started with many buyers and using replication strategy" should {
-
+    "started with many buyers and using replication routing strategy" should {
       "end with auction bought" in {
-
-        val auctionSearch = TestActorRef(Props[AuctionSearch], "auctionSearch")
+        val auctionSearch = TestActorRef(Props[MasterSearchReplication], "auctionSearch")
 
         val seller = TestActorRef(Props[Seller])
 

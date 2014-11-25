@@ -2,35 +2,40 @@ package auctionsystem.search
 
 import akka.actor._
 import akka.routing._
-import akka.util.Timeout
-import auctionsystem.search.AuctionSearch.{RegisterAuction, Search}
-
-import scala.concurrent.duration._
 
 class MasterSearchPartition extends Actor {
 
+  var auctionSearchers: List[ActorRef] = List()
+
   val routees = Vector.fill(5) {
     val r = context.actorOf(Props[AuctionSearch])
+    auctionSearchers = auctionSearchers ::: List(r)
     context watch r
     ActorRefRoutee(r)
   }
 
-  //  var router = {
-  //    Router(RoundRobinRoutingLogic(), routees)
-  //  }
-
-  val router = context.actorOf(Props[AuctionSearch].
-    withRouter(RoundRobinRouter(5)), name = "masterSearchRouter")
-
+  var router = {
+    Router(RoundRobinRoutingLogic(), routees)
+  }
 
   override def receive = {
-    case x: Search =>
-      implicit val timeout = Timeout(5 seconds)
+    case x: AuctionSearch.Search =>
+      println("MASTER SEARCH: Searching")
+      val searchHelper = context.actorOf(SearchHelper.props(auctionSearchers, sender()))
+      searchHelper ! x
+    //      router.route(Broadcast(x), sender())
+    case x: AuctionSearch.RegisterAuction =>
+      println("MASTER SEARCH : register")
+      router.route(x, sender())
+    case Terminated(a) =>
+      router = router.removeRoutee(a)
+      val r = context.actorOf(Props[AuctionSearch])
+      context watch r
+      router = router.addRoutee(r)
     //      router.route(Broadcast(x), sender())
 
-    case x: RegisterAuction =>
-      //      router.route(x, sender())
-      ???
+
+    //      router.route(x, sender())
     //    case Terminated(a) =>
     //      router = router.removeRoutee(a)
     //      val r = context.actorOf(Props[AuctionSearch])
